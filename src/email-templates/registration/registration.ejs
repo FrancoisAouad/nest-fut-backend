@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>User Identity Confirmation</title>
+</head>
+<body>
+  <h1>User Identity Confirmation</h1>
+  
+  <% if (confirmed) { %>
+    <p>Thank you for confirming your identity! You will now be redirected to the confirmation page.</p>
+    <script>
+      setTimeout(() => {
+        window.location.href = "/confirmation-page";
+      }, 3000); 
+    </script>
+  <% } else { %>
+    <p>Please confirm your identity to proceed.</p>
+    <form action="/confirm-identity" method="POST">
+      <label for="username">Username:</label>
+      <input type="text" id="username" name="username" required><br>
+      
+      <label for="password">Password:</label>
+      <input type="password" id="password" name="password" required><br>
+      
+      <button type="submit">Confirm Identity</button>
+    </form>
+  <% } %>
+  
+</body>
+</html>

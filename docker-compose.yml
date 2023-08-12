@@ -1,0 +1,112 @@
+# /*******************************************************************************
+#  *
+#  * Copyright (c) {2022-2023} Francois J. Aouad.
+#  * All rights reserved. This program and the accompanying materials
+#  * are made available under the terms of the GNU General Public License v3.0
+#  * which accompanies this distribution, and is available at
+#  * https://www.gnu.org/licenses/gpl-3.0.en.html
+#  *
+#  *******************************************************************************/
+
+version: '3.7'
+services:
+    # complete monitoring and Logs setup that uses Prometheus, Grafana, Promtail, Loki and cAdvisor
+    api:
+        build:
+            context: .
+            dockerfile: dockerfile
+        container_name: api_c
+        ports:
+            - '5021:5021'
+        depends_on:
+            - mongo
+        logging:
+            driver: loki
+            options:
+               loki-url: "http://host.docker.internal:3100/loki/api/v1/push"
+    prometheus:
+        # prometheus server that scrapes metrics from prom-client server on express api
+        image: prom/prometheus:latest
+        container_name: prometheus_c
+        ports:
+            - '9090:9090'
+        volumes:
+            - './etc/prometheus/config.yaml:/etc/prometheus/config.yaml'
+            # - './var/prometheus:/var/prometheus'
+        command:
+            - '--config.file=/etc/prometheus/config.yaml'
+        restart: always
+        logging:
+            driver: loki
+            options:
+               loki-url: "http://host.docker.internal:3100/loki/api/v1/push"
+    cAdvisor:
+        # server responsible for monitoring container health
+        image: 'gcr.io/cadvisor/cadvisor:latest'
+        container_name: cadvisor_c
+        restart: always
+        ports:
+            - '8080:8080'
+        volumes:
+            #copy these directories to container, /var/run should be rw
+            - /:/rootfs:ro
+            - /var:/var/run:ro
+            - /sys:/sys:ro
+            - /var/lib/docker:/var/lib/docker:ro
+        devices:
+            - /dev/kmsg:/dev/kmsg
+        logging:
+            driver: loki
+            options:
+               loki-url: "http://host.docker.internal:3100/loki/api/v1/push"
+        depends_on:
+            - prometheus
+    grafana:
+        # gui dashboard for logs, metrics and container health history
+        # v9.3.2
+        # https://grafana.com/docs/grafana/latest/setup-grafana/installation/docker/#migrate-to-v51-or-later
+        image: grafana/grafana:latest
+        container_name: grafana_c
+        ports:
+            - '3000:3000'
+        user: 'root'
+        # must login as root user or 471|104 depending on which grafana image version is used
+        volumes:
+            - './etc/grafana/grafana.ini:/etc/grafana/grafana.ini'
+            - './etc/grafana/provisioning:/etc/grafana/provisioning'
+            - './etc/grafana/data:/var/lib/grafana'
+        # command:
+        #     - '--config.file=/etc/grafana/grafana.ini'
+        restart: always
+        logging:
+            driver: loki
+            options:
+               loki-url: "http://host.docker.internal:3100/loki/api/v1/push"
+        depends_on:
+            - prometheus
+            # - loki
+    loki:
+        #server that scrapes log history and data and sends them to grafana as source
+        image: grafana/loki:latest
+        container_name: loki_c
+        ports:
+            - '3100:3100'
+        volumes:
+            - './etc/loki/config.yml:/loki/config.yml'
+        logging:
+            driver: loki
+            options:
+               loki-url: "http://host.docker.internal:3100/loki/api/v1/push"
+        command:
+            - '--config.file=/loki/config.yml'   
+    mongo:
+        container_name: mongo_c
+        image: mongo:6.0
+        restart: always
+        logging:
+            driver: loki
+            options:
+               loki-url: "http://host.docker.internal:3100/loki/api/v1/push"
+        ports:
+        - "27017:27017"
+        command: mongod --logpath=/dev/null 
